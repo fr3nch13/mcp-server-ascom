@@ -90,11 +90,20 @@ Any ASCOM Alpaca device: telescopes, cameras, focusers, filter wheels, domes.
 
 ## Available Tools
 
+### ASCOM Device Control
 - `discover_ascom_devices` - Find devices on network
 - `telescope_connect` / `camera_connect` - Connect to device
 - `telescope_goto` / `telescope_goto_object` - Point telescope
 - `telescope_park` - Park at home position
 - `camera_capture` - Take images
+
+### Seestar File Access (SMB) 🆕
+The Seestar S30 Pro exposes internal storage over SMB on port 445. These tools provide direct access to FITS, JPEG, and thumbnail files:
+- `seestar_list_files` - Browse directories on the scope's internal storage
+- `seestar_download_file` - Download a file to the local machine
+- `seestar_storage_info` - Get storage overview with session directory listing
+
+SMB host is derived from `ASCOM_KNOWN_DEVICES` automatically. All other settings have sensible defaults — no extra configuration required.
 
 ## Event Streaming 🆕
 

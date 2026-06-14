@@ -1,4 +1,4 @@
-# CLAUDE.md - ASCOM MCP Server (v0.4.0)
+# CLAUDE.md - ASCOM MCP Server (v0.5.0)
 
 Bridge ASCOM devices to Claude via MCP. **Now with instant connections!**
 
@@ -12,8 +12,8 @@ source .venv/bin/activate
 python -m ascom_mcp
 
 # Run tests
-pytest tests/unit/ -v         # Unit tests (40+ passing ✅)
-pytest tests/integration/ -v  # Integration tests (NEW!)
+pytest tests/unit/ -v         # Unit tests (55+ passing ✅)
+pytest tests/integration/ -v  # Integration tests
 pytest tests/mcp/ -v          # MCP protocol tests
 ```
 
@@ -137,6 +137,21 @@ get_event_history(
 clear_event_history(device_id="telescope_1")
 ```
 
+### SMB File Access (Seestar S30 Pro) 🆕
+```python
+# List files in root of EMMC Images share
+seestar_list_files(path="/")
+
+# List files in a specific directory
+seestar_list_files(path="/MyWorks/Solar_photo")
+
+# Download a file (saves to local temp dir)
+seestar_download_file(path="/MyWorks/Solar_photo/2026-06-14-141332-Solar.jpg")
+
+# Get storage overview
+seestar_storage_info()
+```
+
 ## Environment Variables (v0.4.0)
 
 ```bash
@@ -152,6 +167,15 @@ export ASCOM_SIMULATOR_DEVICES="localhost:4700:seestar_simulator"
 # Debug logging
 export LOG_LEVEL=DEBUG
 ```
+
+### SMB File Access (Seestar S30 Pro)
+
+The S30 Pro runs a Samba server on port 445 exposing an `EMMC Images` share with anonymous access:
+- `SEESTAR_SMB_PORT` - Port (default: 445)
+- `SEESTAR_SMB_SHARE` - Share name (default: "EMMC Images")
+- `SEESTAR_SMB_USER` / `SEESTAR_SMB_PASSWORD` - Auth (default: empty/anonymous)
+
+SMB host is derived from the first entry in `ASCOM_KNOWN_DEVICES`. No separate env var needed.
 
 ### Removed in v0.4.0:
 - ❌ `ASCOM_SKIP_UDP_DISCOVERY` - No longer needed!
@@ -298,13 +322,14 @@ twine upload dist/*
 
 - `src/ascom_mcp/server_fastmcp.py` - Main server with all tools
 - `src/ascom_mcp/tools/` - Tool implementations
-  - `events.py` - Event history and management (NEW!)
+  - `events.py` - Event history and management
+  - `files.py` - SMB file browsing and download (Seestar S30 Pro) 🆕
 - `src/ascom_mcp/resources/` - MCP resources (NEW!)
   - `event_stream.py` - Real-time event streaming
 - `src/ascom_mcp/devices/` - Device management
   - `device_resolver.py` - Smart device ID resolution
   - `state_persistence.py` - Device memory across sessions
-  - `seestar_event_bridge.py` - Seestar event integration (NEW!)
+  - `seestar_event_bridge.py` - Seestar event integration
 - `tests/conftest.py` - Shared test fixtures
 - `docs/MCP_CONFIGURATION_GUIDE.md` - Complete config reference
 

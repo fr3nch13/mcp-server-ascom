@@ -9,7 +9,7 @@ import asyncio
 import json
 import time
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from ascom_mcp.ascom_logging import StructuredLogger
@@ -59,7 +59,7 @@ class EventStreamManager:
             # Standardize event format
             standardized_event = {
                 "timestamp": time.time(),
-                "datetime": datetime.utcnow().isoformat() + "Z",
+                "datetime": datetime.now(timezone.utc).isoformat() + "Z",
                 "device_id": device_id,
                 "event_type": event_data.get("Event", "Unknown"),
                 "data": event_data,

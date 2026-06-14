@@ -246,7 +246,7 @@ class TelescopeTools(BaseDeviceTools):
                         }
 
                     try:
-                        # Get scope's current position for location (fallback to Henderson)
+                        # Get scope's current position for location
                         scope_loc = None
                         try:
                             connected = self.device_manager.get_connected_device(device_id)
@@ -259,7 +259,10 @@ class TelescopeTools(BaseDeviceTools):
                             pass
 
                         if scope_loc is None:
-                            scope_loc = EarthLocation(lat=35.9938, lon=-114.9673)  # Henderson, NV fallback
+                            raise ValueError(
+                                "Cannot resolve solar system object — telescope has not reported its location. "
+                                "Set the telescope's location in the Seestar app and try again."
+                            )
 
                         now = Time.now()
                         body = get_body(object_name.lower(), now, location=scope_loc)

@@ -3,6 +3,7 @@
 import json
 import logging
 import sys
+from datetime import datetime, timezone
 from typing import Any
 
 # Configure logging to stderr (MCP requirement)
@@ -19,9 +20,7 @@ class StructuredLogger:
     def _log(self, level: str, event: str, **kwargs: Any):
         """Log structured event."""
         entry = {
-            "timestamp": logging.Formatter().formatTime(
-                logging.LogRecord("", 0, "", 0, "", (), None)
-            ),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": level,
             "logger": self.name,
             "event": event,
@@ -34,6 +33,9 @@ class StructuredLogger:
 
     def error(self, event: str, **kwargs: Any):
         self._log("error", event, **kwargs)
+
+    def warning(self, event: str, **kwargs: Any):
+        self._log("warning", event, **kwargs)
 
     def debug(self, event: str, **kwargs: Any):
         self._log("debug", event, **kwargs)

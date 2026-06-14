@@ -25,8 +25,15 @@ Core implementation of ASCOM device bridging to MCP protocol using FastMCP 2.0.
 
 ### `tools/` directory
 - DiscoveryTools, TelescopeTools, CameraTools
+- SeestarFileTools - SMB file browsing/download from S30 Pro (pysmb)
 - Business logic separated from MCP protocol
 - Testable without MCP overhead
+
+### `config.py` — SMB
+- `SEESTAR_SMB_PORT` — Port (default: 445)
+- `SEESTAR_SMB_SHARE` — Share name (default: "EMMC Images")
+- `SEESTAR_SMB_USER` / `SEESTAR_SMB_PASSWORD` — Auth (default: anonymous)
+- SMB host derived from first `ASCOM_KNOWN_DEVICES` entry automatically
 
 ## Critical Patterns
 

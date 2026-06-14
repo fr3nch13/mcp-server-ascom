@@ -14,15 +14,16 @@ from ..utils.errors import (
     DeviceBusyError,
     InvalidParameterError,
 )
+from .base import BaseDeviceTools
 
 logger = logging.getLogger(__name__)
 
 
-class CameraTools:
+class CameraTools(BaseDeviceTools):
     """Tools for controlling ASCOM cameras."""
 
     def __init__(self, device_manager: DeviceManager):
-        self.device_manager = device_manager
+        super().__init__(device_manager)
 
     async def connect(self, device_id: str) -> dict[str, Any]:
         """Connect to a camera."""
@@ -60,19 +61,30 @@ class CameraTools:
                 info["cooler_on"] = camera.CoolerOn
                 info["ccd_temperature"] = camera.CCDTemperature
 
-            return {
-                "success": True,
-                "message": f"Connected to {connected.info.name}",
-                "camera": info,
-            }
+            return self._success_response(
+                f"Connected to {connected.info.name}",
+                camera=info,
+            )
 
         except Exception as e:
             logger.error(f"Failed to connect: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "message": f"Failed to connect to camera {device_id}",
-            }
+            return self._error_response(
+                str(e),
+                message=f"Failed to connect to camera {device_id}",
+            )
+
+    async def disconnect(self, device_id: str) -> dict[str, Any]:
+        """Disconnect from a camera."""
+        try:
+            logger.info(f"Disconnecting from camera {device_id}")
+            await self.device_manager.disconnect_device(device_id)
+            return self._success_response(f"Disconnected from camera {device_id}")
+        except Exception as e:
+            logger.error(f"Failed to disconnect: {e}")
+            return self._error_response(
+                str(e),
+                message=f"Failed to disconnect from camera {device_id}",
+            )
 
     async def capture(
         self, device_id: str, exposure_seconds: float, light_frame: bool = True
@@ -137,28 +149,24 @@ class CameraTools:
                 "offset": camera.Offset if hasattr(camera, "Offset") else None,
             }
 
-            # For now, return success without the actual image data
-            # In production, would save to file or return encoded
-            return {
-                "success": True,
-                "message": f"Captured {exposure_seconds}s {'light' if light_frame else 'dark'} frame",
-                "metadata": metadata,
-                "image_info": {
+            return self._success_response(
+                f"Captured {exposure_seconds}s {'light' if light_frame else 'dark'} frame",
+                metadata=metadata,
+                image_info={
                     "width": camera.NumX,
                     "height": camera.NumY,
                     "bit_depth": camera.ImageArray.dtype.name
                     if hasattr(image_array, "dtype")
                     else "unknown",
                 },
-            }
+            )
 
         except Exception as e:
             logger.error(f"Capture failed: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "message": "Failed to capture image",
-            }
+            return self._error_response(
+                str(e),
+                message="Failed to capture image",
+            )
 
     async def get_status(self, device_id: str) -> dict[str, Any]:
         """Get current camera status."""
@@ -218,15 +226,14 @@ class CameraTools:
             if hasattr(camera, "ReadoutMode"):
                 settings["readout_mode"] = camera.ReadoutMode
 
-            return {"success": True, "status": status, "settings": settings}
+            return self._success_response("Camera status retrieved", status=status, settings=settings)
 
         except Exception as e:
             logger.error(f"Failed to get status: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "message": "Failed to get camera status",
-            }
+            return self._error_response(
+                str(e),
+                message="Failed to get camera status",
+            )
 
     def _get_sensor_type_name(self, sensor_type: int) -> str:
         """Convert sensor type code to name."""

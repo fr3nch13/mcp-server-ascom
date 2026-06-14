@@ -21,7 +21,7 @@ class TestObservationWorkflow:
             "ASCOM_KNOWN_DEVICES": "localhost:4700:seestar_simulator",
             "ASCOM_SKIP_UDP_DISCOVERY": "true"
         }):
-            server = await create_server()
+            server = create_server()
             async with Client(server) as client:
                 yield client
                 

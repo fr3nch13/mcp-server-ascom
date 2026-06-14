@@ -87,6 +87,7 @@ cython_debug/
 *.sqlite3
 .env.local
 .env.*.local
+.env.real_seestar
 
 # ASCOM specific
 device_cache.json
@@ -105,8 +106,8 @@ test_images/
 *.test.fits
 
 # Temporary debug files
-debug_*.py
-test_*.py
+/debug_*.py
+/test_*.py
 send_init.py
 test_fastmcp_*.py
 test_stdio_*.py

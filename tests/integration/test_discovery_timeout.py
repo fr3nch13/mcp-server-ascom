@@ -37,11 +37,11 @@ class TestDiscoveryTimeout:
             await manager.initialize()
             
             # Check if devices are available without discovery
-            available = manager.get_available_devices()
-            device_names = [d.name for d in available]
+            available = await manager.get_available_devices()
+            device_names = [d["name"] for d in available]
             
-            assert "seestar_alp" in device_names
-            assert "simulator" in device_names
+            assert "seestar_alp" in device_names or "seestar_alp (Known)" in device_names
+            assert "simulator" in device_names or "simulator (Known)" in device_names
             
     @pytest.mark.asyncio 
     async def test_discovery_timeout_behavior(self):

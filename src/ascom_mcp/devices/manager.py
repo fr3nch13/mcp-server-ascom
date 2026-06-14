@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from aiohttp import ClientSession
@@ -55,7 +55,7 @@ class DeviceInfo:
             "host": self.host,
             "port": self.port,
             "api_version": self.api_version,
-            "discovered_at": datetime.utcnow().isoformat() + "Z",
+            "discovered_at": datetime.now(timezone.utc).isoformat() + "Z",
             "connection_url": f"http://{self.host}:{self.port}/api/v1",
         }
 
@@ -66,12 +66,12 @@ class ConnectedDevice:
     def __init__(self, info: DeviceInfo, client: Any):
         self.info = info
         self.client = client
-        self.connected_at = datetime.utcnow()
-        self.last_used = datetime.utcnow()
+        self.connected_at = datetime.now(timezone.utc)
+        self.last_used = datetime.now(timezone.utc)
 
     def update_last_used(self):
         """Update last used timestamp."""
-        self.last_used = datetime.utcnow()
+        self.last_used = datetime.now(timezone.utc)
 
 
 class DeviceManager:
@@ -85,6 +85,8 @@ class DeviceManager:
         return cls._instance
 
     def __init__(self):
+        if hasattr(self, "_initialized"):
+            return
         self._available_devices: dict[str, DeviceInfo] = {}
         self._connected_devices: dict[str, ConnectedDevice] = {}
         self._session: ClientSession | None = None
@@ -92,6 +94,7 @@ class DeviceManager:
         self._connection_lock = asyncio.Lock()
         self._state_persistence = DeviceStatePersistence()
         self._event_callbacks: dict[str, callable] = {}
+        self._initialized = True
 
     async def initialize(self):
         """Initialize the device manager."""
@@ -445,6 +448,12 @@ class DeviceManager:
                 client = connected.client
                 info["driver_info"] = getattr(client, "DriverInfo", "Unknown")
                 info["driver_version"] = getattr(client, "DriverVersion", "Unknown")
+                info["can_slew"] = getattr(client, "CanSlew", None)
+                info["can_park"] = getattr(client, "CanPark", None)
+                info["can_find_home"] = getattr(client, "CanFindHome", None)
+                info["can_track"] = getattr(client, "CanTrack", None)
+                info["slewing"] = getattr(client, "Slewing", None)
+                info["is_parked"] = getattr(client, "AtPark", None)
             except Exception as e:
                 logger.warning(f"Could not get driver info: {e}")
                 
@@ -496,9 +505,8 @@ class DeviceManager:
                     self._available_devices[device_id] = device_info
                     logger.info(f"Pre-populated {name} at {host}:{port} as {device_id}")
         
-        # Also pre-populate from known_devices if ASCOM_PREPOPULATE_KNOWN is true
-        if os.getenv("ASCOM_PREPOPULATE_KNOWN", "false").lower() == "true":
-            for host, port, name in config.known_devices:
+        # Also pre-populate from known_devices
+        for host, port, name in config.known_devices:
                 device_data = {
                     "DeviceType": "Telescope",
                     "DeviceNumber": 1,

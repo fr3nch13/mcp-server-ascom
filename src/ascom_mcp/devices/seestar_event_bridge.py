@@ -109,7 +109,10 @@ class SeestarEventBridge:
         try:
             self._event_loop = asyncio.get_running_loop()
         except RuntimeError:
-            # No event loop running, we'll handle events synchronously
+            logger.warning(
+                "No async event loop available — Seestar event streaming disabled. "
+                "Events will not be forwarded to MCP subscribers."
+            )
             self._event_loop = None
             
     def handle_sync_event(self, device_id: str, event_data: dict):

@@ -4,8 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ascom_mcp.devices.manager import ConnectedDevice, DeviceInfo, DeviceManager
-from ascom_mcp.utils.errors import DeviceNotFoundError
+from ascom_mcp.devices.manager import (
+    ConnectedDevice,
+    DeviceInfo,
+    DeviceManager,
+    DeviceNotFoundError,
+)
 
 
 class TestDeviceInfo:

@@ -18,7 +18,7 @@ try:
     __version__ = version("mcp-server-ascom")
 except PackageNotFoundError:
     # Fallback for development when package is not installed
-    __version__ = "0.4.0"
+    __version__ = "0.5.0"
 
 from .server_fastmcp import create_server
 

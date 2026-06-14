@@ -13,7 +13,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastmcp import FastMCP, Context
+from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
 
 from . import __version__
@@ -25,6 +25,7 @@ from .resources.event_stream import EventStreamManager
 from .tools.camera import CameraTools
 from .tools.discovery import DiscoveryTools
 from .tools.events import EventTools
+from .tools.files import seestar_file_tools
 from .tools.telescope import TelescopeTools
 
 # Structured logger (logs to stderr per MCP spec)
@@ -58,10 +59,12 @@ async def server_lifespan(server: FastMCP):
     event_manager = EventStreamManager()
     event_bridge = SeestarEventBridge(event_manager)
     event_bridge.setup_event_loop()  # Capture asyncio event loop for sync->async bridge
-    
+
     # Register event callbacks
-    device_manager.register_event_callback("on_device_connected", event_bridge.connect_to_seestar)
-    
+    device_manager.register_event_callback(
+        "on_device_connected", event_bridge.connect_to_seestar
+    )
+
     discovery_tools = DiscoveryTools(device_manager)
     telescope_tools = TelescopeTools(device_manager)
     camera_tools = CameraTools(device_manager)
@@ -76,6 +79,11 @@ async def server_lifespan(server: FastMCP):
         logger.info("Shutting down ASCOM MCP Server")
         if device_manager:
             await device_manager.shutdown()
+        # Close SMB connection if open
+        try:
+            await seestar_file_tools._ensure_disconnected()
+        except Exception:
+            pass
         logger.info("Server shutdown complete")
 
 
@@ -89,12 +97,14 @@ async def ensure_initialized():
 
     if event_manager is None:
         event_manager = EventStreamManager()
-        
+
     if event_bridge is None:
         event_bridge = SeestarEventBridge(event_manager)
         event_bridge.setup_event_loop()  # Capture asyncio event loop
         # Register event callbacks
-        device_manager.register_event_callback("on_device_connected", event_bridge.connect_to_seestar)
+        device_manager.register_event_callback(
+            "on_device_connected", event_bridge.connect_to_seestar
+        )
 
     if discovery_tools is None:
         discovery_tools = DiscoveryTools(device_manager)
@@ -104,7 +114,7 @@ async def ensure_initialized():
 
     if camera_tools is None:
         camera_tools = CameraTools(device_manager)
-        
+
     if event_tools is None:
         event_tools = EventTools(device_manager, event_manager)
 
@@ -134,7 +144,12 @@ async def discover_ascom_devices(ctx: Context, timeout: float = 5.0) -> dict[str
             f"Device discovery failed: {str(e)}",
             code="discovery_failed",
             recoverable=True,
-            details={"suggestions": ["Check network connectivity", "Ensure devices are powered on"]}
+            details={
+                "suggestions": [
+                    "Check network connectivity",
+                    "Ensure devices are powered on",
+                ]
+            },
         )
 
 
@@ -158,7 +173,7 @@ async def get_device_info(ctx: Context, device_id: str) -> dict[str, Any]:
         raise ToolError(
             f"Cannot get info for device '{device_id}': {str(e)}",
             code="device_not_found",
-            recoverable=True
+            recoverable=True,
         )
 
 
@@ -179,16 +194,20 @@ async def telescope_connect(ctx: Context, device_id: str) -> dict[str, Any]:
     try:
         return await telescope_tools.connect(device_id=device_id)
     except Exception as e:
-        await ctx.error(f"telescope_connect_failed: device_id={device_id}, error={str(e)}")
+        await ctx.error(
+            f"telescope_connect_failed: device_id={device_id}, error={str(e)}"
+        )
         raise ToolError(
             f"Cannot connect to telescope '{device_id}': {str(e)}",
             code="connection_failed",
             recoverable=True,
-            details={"suggestions": [
-                "Check if seestar_alp is running (python root_app.py)",
-                "Try using simulator mode",
-                "Verify device ID from discovery"
-            ]}
+            details={
+                "suggestions": [
+                    "Check if seestar_alp is running (python root_app.py)",
+                    "Try using simulator mode",
+                    "Verify device ID from discovery",
+                ]
+            },
         )
 
 
@@ -208,16 +227,20 @@ async def telescope_disconnect(ctx: Context, device_id: str) -> dict[str, Any]:
     try:
         return await telescope_tools.disconnect(device_id=device_id)
     except Exception as e:
-        await ctx.error(f"telescope_disconnect_failed: device_id={device_id}, error={str(e)}")
+        await ctx.error(
+            f"telescope_disconnect_failed: device_id={device_id}, error={str(e)}"
+        )
         raise ToolError(
             f"Cannot disconnect telescope '{device_id}': {str(e)}",
             code="disconnect_failed",
-            recoverable=True
+            recoverable=True,
         )
 
 
 @mcp.tool()
-async def telescope_goto(ctx: Context, device_id: str, ra: float, dec: float) -> dict[str, Any]:
+async def telescope_goto(
+    ctx: Context, device_id: str, ra: float, dec: float
+) -> dict[str, Any]:
     """Slew telescope to specific coordinates.
 
     Args:
@@ -236,14 +259,14 @@ async def telescope_goto(ctx: Context, device_id: str, ra: float, dec: float) ->
     except Exception as e:
         await ctx.error(f"telescope_goto_failed: device_id={device_id}, error={str(e)}")
         raise ToolError(
-            f"Cannot slew telescope: {str(e)}",
-            code="slew_failed",
-            recoverable=True
+            f"Cannot slew telescope: {str(e)}", code="slew_failed", recoverable=True
         )
 
 
 @mcp.tool()
-async def telescope_goto_object(ctx: Context, device_id: str, object_name: str) -> dict[str, Any]:
+async def telescope_goto_object(
+    ctx: Context, device_id: str, object_name: str
+) -> dict[str, Any]:
     """Slew telescope to a named celestial object.
 
     Args:
@@ -255,18 +278,27 @@ async def telescope_goto_object(ctx: Context, device_id: str, object_name: str) 
         Slew status dictionary
     """
     await ensure_initialized()
-    await ctx.info(f"telescope_goto_object: device_id={device_id}, object={object_name}")
+    await ctx.info(
+        f"telescope_goto_object: device_id={device_id}, object={object_name}"
+    )
     try:
         return await telescope_tools.goto_object(
             device_id=device_id, object_name=object_name
         )
     except Exception as e:
-        await ctx.error(f"telescope_goto_object_failed: device_id={device_id}, object={object_name}, error={str(e)}")
+        await ctx.error(
+            f"telescope_goto_object_failed: device_id={device_id}, object={object_name}, error={str(e)}"
+        )
         raise ToolError(
             f"Cannot slew to object '{object_name}': {str(e)}",
             code="object_lookup_failed",
             recoverable=True,
-            details={"suggestions": ["Check object name spelling", "Try catalog designation (e.g., M31, NGC 224)"]}
+            details={
+                "suggestions": [
+                    "Check object name spelling",
+                    "Try catalog designation (e.g., M31, NGC 224)",
+                ]
+            },
         )
 
 
@@ -290,7 +322,7 @@ async def telescope_get_position(ctx: Context, device_id: str) -> dict[str, Any]
         raise ToolError(
             f"Cannot get telescope position: {str(e)}",
             code="position_read_failed",
-            recoverable=True
+            recoverable=True,
         )
 
 
@@ -312,15 +344,16 @@ async def telescope_park(ctx: Context, device_id: str) -> dict[str, Any]:
     except Exception as e:
         await ctx.error(f"telescope_park_failed: device_id={device_id}, error={str(e)}")
         raise ToolError(
-            f"Cannot park telescope: {str(e)}",
-            code="park_failed",
-            recoverable=True
+            f"Cannot park telescope: {str(e)}", code="park_failed", recoverable=True
         )
 
 
 @mcp.tool()
 async def telescope_custom_action(
-    ctx: Context, device_id: str, action: str, parameters: str | dict[str, Any] | None = None
+    ctx: Context,
+    device_id: str,
+    action: str,
+    parameters: str | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute custom ASCOM action (e.g., Seestar-specific commands).
 
@@ -344,11 +377,12 @@ async def telescope_custom_action(
     """
     await ensure_initialized()
     await ctx.info(f"telescope_custom_action: device_id={device_id}, action={action}")
-    
+
     # Handle string parameters (workaround for MCP/Claude JSON serialization issue)
     if isinstance(parameters, str):
         try:
             import json
+
             parameters = json.loads(parameters)
             await ctx.debug("Parsed string parameters to dict")
         except json.JSONDecodeError as e:
@@ -356,19 +390,21 @@ async def telescope_custom_action(
             raise ToolError(
                 f"Invalid JSON in parameters: {e}",
                 code="invalid_json",
-                recoverable=True
+                recoverable=True,
             )
-    
+
     try:
         return await telescope_tools.custom_action(
             device_id=device_id, action=action, parameters=parameters
         )
     except Exception as e:
-        await ctx.error(f"custom_action_failed: device_id={device_id}, action={action}, error={str(e)}")
+        await ctx.error(
+            f"custom_action_failed: device_id={device_id}, action={action}, error={str(e)}"
+        )
         raise ToolError(
             f"Custom action '{action}' failed: {str(e)}",
             code="custom_action_failed",
-            recoverable=True
+            recoverable=True,
         )
 
 
@@ -393,7 +429,7 @@ async def camera_connect(ctx: Context, device_id: str) -> dict[str, Any]:
         raise ToolError(
             f"Cannot connect to camera '{device_id}': {str(e)}",
             code="connection_failed",
-            recoverable=True
+            recoverable=True,
         )
 
 
@@ -413,17 +449,19 @@ async def camera_capture(
         Capture result dictionary
     """
     await ensure_initialized()
-    await ctx.info(f"camera_capture: device_id={device_id}, exposure={exposure_seconds}, light_frame={light_frame}")
+    await ctx.info(
+        f"camera_capture: device_id={device_id}, exposure={exposure_seconds}, light_frame={light_frame}"
+    )
     try:
         return await camera_tools.capture(
-            device_id=device_id, exposure_seconds=exposure_seconds, light_frame=light_frame
+            device_id=device_id,
+            exposure_seconds=exposure_seconds,
+            light_frame=light_frame,
         )
     except Exception as e:
         await ctx.error(f"camera_capture_failed: device_id={device_id}, error={str(e)}")
         raise ToolError(
-            f"Camera capture failed: {str(e)}",
-            code="capture_failed",
-            recoverable=True
+            f"Camera capture failed: {str(e)}", code="capture_failed", recoverable=True
         )
 
 
@@ -447,7 +485,7 @@ async def camera_get_status(ctx: Context, device_id: str) -> dict[str, Any]:
         raise ToolError(
             f"Cannot get camera status: {str(e)}",
             code="status_read_failed",
-            recoverable=True
+            recoverable=True,
         )
 
 
@@ -482,11 +520,13 @@ async def get_event_history(
             since_timestamp=since_timestamp,
         )
     except Exception as e:
-        await ctx.error(f"get_event_history_failed: device_id={device_id}, error={str(e)}")
+        await ctx.error(
+            f"get_event_history_failed: device_id={device_id}, error={str(e)}"
+        )
         raise ToolError(
             f"Cannot get event history: {str(e)}",
             code="event_history_failed",
-            recoverable=True
+            recoverable=True,
         )
 
 
@@ -506,11 +546,13 @@ async def clear_event_history(ctx: Context, device_id: str) -> dict[str, Any]:
     try:
         return await event_tools.clear_event_history(device_id=device_id)
     except Exception as e:
-        await ctx.error(f"clear_event_history_failed: device_id={device_id}, error={str(e)}")
+        await ctx.error(
+            f"clear_event_history_failed: device_id={device_id}, error={str(e)}"
+        )
         raise ToolError(
             f"Cannot clear event history: {str(e)}",
             code="clear_history_failed",
-            recoverable=True
+            recoverable=True,
         )
 
 
@@ -533,7 +575,7 @@ async def get_event_types(ctx: Context) -> dict[str, Any]:
         raise ToolError(
             f"Cannot get event types: {str(e)}",
             code="event_types_failed",
-            recoverable=True
+            recoverable=True,
         )
 
 
@@ -542,23 +584,28 @@ async def get_event_types(ctx: Context) -> dict[str, Any]:
 async def health_check() -> str:
     """Health check endpoint with device and simulator status."""
     await ensure_initialized()
-    
+
     health_data = {
         "status": "healthy",
         "version": __version__,
         "server": "ASCOM MCP Server",
         "implementation": "FastMCP 2.0",
         "devices": {
-            "available": len(device_manager._available_devices) if device_manager else 0,
-            "connected": len(device_manager._connected_devices) if device_manager else 0,
+            "available": (
+                len(device_manager._available_devices) if device_manager else 0
+            ),
+            "connected": (
+                len(device_manager._connected_devices) if device_manager else 0
+            ),
         },
         "known_devices": [
-            {"host": host, "port": port, "name": name} 
+            {"host": host, "port": port, "name": name}
             for host, port, name in config.known_devices
         ],
-        "simulator_status": "Check ASCOM_SIMULATOR_DEVICES env var for simulator configuration"
+        "simulator_status": "Check ASCOM_SIMULATOR_DEVICES env var for simulator configuration",
     }
     return json.dumps(health_data, indent=2)
+
 
 @mcp.resource("ascom://server/info")
 async def get_server_info() -> str:
@@ -579,6 +626,90 @@ async def get_server_info() -> str:
         ],
     }
     return json.dumps(info, indent=2)
+
+
+# Seestar file tools
+@mcp.tool()
+async def seestar_list_files(ctx: Context, path: str = "/") -> dict[str, Any]:
+    """List files and directories on the Seestar's internal storage.
+
+    Browse images captured by the Seestar S30 Pro. Files are organized
+    in date-based directories (e.g., "/2025-08-01/").
+
+    Args:
+        ctx: FastMCP context for logging and request metadata
+        path: Directory path within the EMMC Images share (default: "/")
+
+    Returns:
+        Directory listing with files and subdirectories
+    """
+    await ctx.info(f"listing_files: path={path}")
+    try:
+        return await seestar_file_tools.list_files(path=path)
+    except Exception as e:
+        await ctx.error(f"list_files_failed: {str(e)}")
+        raise ToolError(
+            f"Cannot list files: {str(e)}",
+            code="list_files_failed",
+            recoverable=True,
+            details={
+                "suggestions": [
+                    "Ensure Seestar is on the network",
+                    "Check SMB port 445 is open",
+                    "Try listing root path '/'",
+                ]
+            },
+        )
+
+
+@mcp.tool()
+async def seestar_download_file(ctx: Context, path: str) -> dict[str, Any]:
+    """Download a file from the Seestar's internal storage.
+
+    Retrieves FITS, JPG, or other files from the telescope and saves
+    them locally. Supports all file types the Seestar captures.
+
+    Args:
+        ctx: FastMCP context for logging and request metadata
+        path: Path to the file within the EMMC Images share
+              (e.g., "/2025-08-01/M42_light_30s.fits")
+
+    Returns:
+        File metadata and local save path
+    """
+    await ctx.info(f"downloading_file: path={path}")
+    try:
+        return await seestar_file_tools.download_file(path=path)
+    except Exception as e:
+        await ctx.error(f"download_file_failed: {str(e)}")
+        raise ToolError(
+            f"Cannot download file: {str(e)}", code="download_failed", recoverable=True
+        )
+
+
+@mcp.tool()
+async def seestar_storage_info(ctx: Context) -> dict[str, Any]:
+    """Get storage overview from the Seestar's internal storage.
+
+    Returns a summary of observation sessions (organized by date)
+    and file counts for each session.
+
+    Args:
+        ctx: FastMCP context for logging and request metadata
+
+    Returns:
+        Storage info with session directories and file counts
+    """
+    await ctx.info("getting_storage_info")
+    try:
+        return await seestar_file_tools.get_storage_info()
+    except Exception as e:
+        await ctx.error(f"storage_info_failed: {str(e)}")
+        raise ToolError(
+            f"Cannot get storage info: {str(e)}",
+            code="storage_info_failed",
+            recoverable=True,
+        )
 
 
 @mcp.resource("ascom://devices/connected")
@@ -602,38 +733,36 @@ async def get_available_devices() -> str:
 @mcp.resource("ascom://events/{device_id}/stream")
 async def get_event_stream(device_id: str, ctx: Context) -> str:
     """Get the current event stream for a device.
-    
+
     This resource provides the latest events from an ASCOM device.
     The resource will be automatically updated when new events arrive,
     triggering notifications to subscribed clients.
-    
+
     Args:
         device_id: Device identifier
         ctx: FastMCP context
-        
+
     Returns:
         JSON with current event state and recent events
     """
     await ensure_initialized()
-    
+
     try:
         # Get current events (last 50 by default)
         events = await event_manager.get_events(device_id, limit=50)
-        
+
         # Add server metadata
         events["server_time"] = time.time()
         events["resource_uri"] = f"ascom://events/{device_id}/stream"
-        
+
         return json.dumps(events, indent=2)
-        
+
     except Exception as e:
         logger.error(f"Failed to get event stream: {e}")
-        return json.dumps({
-            "device_id": device_id,
-            "status": "error",
-            "error": str(e),
-            "events": []
-        }, indent=2)
+        return json.dumps(
+            {"device_id": device_id, "status": "error", "error": str(e), "events": []},
+            indent=2,
+        )
 
 
 def create_server():
