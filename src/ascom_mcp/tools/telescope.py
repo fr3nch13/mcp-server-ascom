@@ -19,7 +19,8 @@ except ImportError:
 # Make astropy optional for now due to environment issues
 try:
     from astropy import units as u
-    from astropy.coordinates import SkyCoord
+    from astropy.coordinates import SkyCoord, get_body, EarthLocation
+    from astropy.time import Time
 
     ASTROPY_AVAILABLE = True
 except ImportError:
@@ -236,12 +237,62 @@ class TelescopeTools(BaseDeviceTools):
                     "uranus",
                     "neptune",
                 ]:
-                    # For now, return a helpful message
-                    # In production, would calculate ephemeris
-                    return {
-                        "success": False,
-                        "message": f"Solar system object '{object_name}' requires ephemeris calculation (coming soon)",
-                    }
+                    # Calculate ephemeris using astropy
+                    if not ASTROPY_AVAILABLE:
+                        return {
+                            "success": False,
+                            "error": "Astropy not available",
+                            "message": f"Cannot resolve '{object_name}' — astropy is required for ephemeris calculation. Use telescope_goto with RA/Dec coordinates instead.",
+                        }
+
+                    try:
+                        # Get scope's current position for location (fallback to Henderson)
+                        scope_loc = None
+                        try:
+                            connected = self.device_manager.get_connected_device(device_id)
+                            telescope = connected.client
+                            lat = getattr(telescope, "Latitude", None)
+                            lon = getattr(telescope, "Longitude", None)
+                            if lat is not None and lon is not None:
+                                scope_loc = EarthLocation(lat=float(lat), lon=float(lon))
+                        except Exception:
+                            pass
+
+                        if scope_loc is None:
+                            scope_loc = EarthLocation(lat=35.9938, lon=-114.9673)  # Henderson, NV fallback
+
+                        now = Time.now()
+                        body = get_body(object_name.lower(), now, location=scope_loc)
+                        ra_hours = body.ra.hour
+                        dec_deg = body.dec.degree
+
+                        logger.info(
+                            f"Resolved {object_name} via ephemeris to RA={ra_hours:.3f}h, Dec={dec_deg:+.2f}°"
+                        )
+
+                        result = await self.goto(device_id, ra_hours, dec_deg)
+
+                        if result["success"]:
+                            result["message"] = (
+                                f"Slewing to {object_name} (RA={ra_hours:.3f}h, Dec={dec_deg:+.2f}°)"
+                            )
+                            result["object_info"] = {
+                                "name": object_name,
+                                "ra_hours": ra_hours,
+                                "dec_degrees": dec_deg,
+                                "ra_hms": body.ra.to_string(unit=u.hour, sep=":", precision=1),
+                                "dec_dms": body.dec.to_string(unit=u.degree, sep=":", precision=0),
+                            }
+
+                        return result
+
+                    except Exception as e:
+                        logger.error(f"Ephemeris calculation failed for {object_name}: {e}")
+                        return {
+                            "success": False,
+                            "error": str(e),
+                            "message": f"Could not calculate position for '{object_name}': {e}",
+                        }
 
                 # Check if astropy is available
                 if not ASTROPY_AVAILABLE:
